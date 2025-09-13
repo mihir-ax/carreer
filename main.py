@@ -1,192 +1,104 @@
-const API_URL = 'https://career-guidance-api-97tg.onrender.com';
+import os
+import json
+import httpx
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Dict
+from dotenv import load_dotenv
+from collections import Counter
 
-// State variables to manage the quiz flow
-let currentPhase = 'general';
-let questions = [];
-let currentQuestionIndex = 0;
-let allAnswersForAI = [];
+load_dotenv()
+app = FastAPI()
 
-document.addEventListener('DOMContentLoaded', () => {
-    if (document.getElementById('quiz-area')) {
-        startQuiz();
-    }
-});
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-function startQuiz() {
-    fetchQuestions(API_URL + '/api/quiz/start');
+# --- Load Questions from JSON file at startup ---
+try:
+    with open("data/questions.json", "r") as f:
+        all_questions = json.load(f)["questions"]
+except FileNotFoundError:
+    all_questions = []
+    print("WARNING: data/questions.json not found.")
+
+# --- Pydantic Models ---
+class GeneralAnswer(BaseModel):
+    questionId: str
+    selectedCategory: str
+
+class NextPhaseRequest(BaseModel):
+    answers: List[GeneralAnswer]
+
+class FullQuizSubmission(BaseModel):
+    all_answers: List[Dict[str, str]]
+
+# --- AI Prompt Engineering ---
+system_prompt = """
+You are an expert career counselor for Indian students. Your task is to analyze a student's responses from a two-phase quiz (general aptitude and specific interests) and recommend a primary and secondary academic stream (Arts, Science, Commerce).
+You will receive a list of all questions and the student's selected answers.
+Your response MUST be a single, clean JSON object and nothing else.
+The JSON object must have the following structure:
+{
+  "recommended_stream": "The single best stream for the student (e.g., 'Science')",
+  "secondary_stream": "The second best stream (e.g., 'Commerce')",
+  "reason": "A short, encouraging, one-sentence explanation in English for your recommendation. Start with 'Based on your answers...'",
+  "suitable_careers": [
+    "A suitable career path (e.g., 'Software Developer')",
+    "Another suitable career path (e.g., 'Data Scientist')",
+    "A third career path (e.g., 'Researcher')"
+  ]
 }
+"""
 
-async function fetchQuestions(url, options = {}) {
-    const quizArea = document.getElementById('quiz-area');
-    quizArea.innerHTML = '<div class="loader"></div>';
-    try {
-        const response = await fetch(url, options);
-        // Add a check for a successful response
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        
-        questions = [...questions, ...data.questions];
-        
-        // This was a bug. The index should not be reset, it should continue
-        // from where it left off, but since we are showing question by question,
-        // we start with the first new question. This is handled by nextStep logic.
-        
-        renderCurrentQuestion();
-    } catch (error) {
-        console.error("Error fetching questions:", error);
-        const quizContainer = document.querySelector('.quiz-container');
-        quizContainer.innerHTML = '<p style="text-align: center; color: red;">Could not load the next part of the quiz. Please refresh and try again.</p>';
-    }
-}
+# --- API Endpoints ---
+@app.get("/api/quiz/start")
+def get_general_questions():
+    general_q = [q for q in all_questions if q.get("phase") == "general"]
+    return {"questions": general_q}
 
-function renderCurrentQuestion() {
-    const quizArea = document.getElementById('quiz-area');
-    quizArea.innerHTML = ''; // Clear loader or previous question
-
-    if (currentQuestionIndex >= questions.length) {
-        return; // Should not happen, handled by nextStep
-    }
-
-    const q = questions[currentQuestionIndex];
+@app.post("/api/quiz/next")
+def get_specific_questions(request: NextPhaseRequest):
+    if not request.answers:
+        raise HTTPException(status_code=400, detail="No answers provided.")
     
-    const questionSlide = document.createElement('div');
-    questionSlide.className = 'question-slide active';
-
-    let optionsHTML = '<div class="options-grid">';
-    q.options.forEach(opt => {
-        const category = opt.category || '';
-        optionsHTML += `<button class="option-btn" data-category="${category}">${opt.text}</button>`;
-    });
-    optionsHTML += '</div>';
-
-    questionSlide.innerHTML = `<h2 id="question-text">${q.question}</h2>` + optionsHTML;
-    quizArea.appendChild(questionSlide);
-
-    updateProgressBar();
-    addOptionListeners();
-}
-
-function addOptionListeners() {
-    document.querySelectorAll('.option-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const selectedText = btn.textContent;
-            const selectedCategory = btn.dataset.category;
-            const currentQuestion = questions[currentQuestionIndex];
-            
-            // Save the answer with the question ID
-            allAnswersForAI.push({
-                questionId: currentQuestion.id,
-                question: currentQuestion.question,
-                answer: selectedText,
-                category: selectedCategory
-            });
-            
-            btn.classList.add('selected');
-            document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
-            
-            setTimeout(nextStep, 400);
-        });
-    });
-}
-
-function nextStep() {
-    const currentSlide = document.querySelector('.question-slide');
-    if (currentSlide) {
-        currentSlide.classList.add('exiting');
-    }
-
-    setTimeout(() => {
-        currentQuestionIndex++;
-        if (currentQuestionIndex < questions.length) {
-            renderCurrentQuestion();
-        } else {
-            if (currentPhase === 'general') {
-                currentPhase = 'specific';
-                
-                // **THE FIX IS HERE**
-                // We create the payload from the answers we have stored
-                const generalAnswers = allAnswersForAI.map(ans => ({
-                    questionId: ans.questionId,
-                    selectedCategory: ans.category
-                })).filter(ans => ans.questionId && ans.selectedCategory); // Ensure we only send valid entries
-
-                fetchQuestions(API_URL + '/api/quiz/next', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ answers: generalAnswers })
-                });
-            } else {
-                submitToAI();
-            }
-        }
-    }, 400);
-}
-
-async function submitToAI() {
-    const quizArea = document.getElementById('quiz-area');
-    quizArea.innerHTML = '<div class="loader"></div><p style="text-align:center;">Sending to our AI counselor for analysis...</p>';
-
-    const finalSubmission = allAnswersForAI.map(({ question, answer }) => ({ question, answer }));
-
-    try {
-        const response = await fetch(`${API_URL}/api/quiz/submit`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ all_answers: finalSubmission })
-        });
-        if (!response.ok) { throw new Error('AI submission failed'); }
-        const result = await response.json();
-        const aiData = JSON.parse(result.data);
-        displayResult(aiData);
-    } catch (error) {
-        console.error("Error submitting quiz:", error);
-        quizArea.innerHTML = '<p>Sorry, there was an error generating your result.</p>';
-    }
-}
-
-function updateProgressBar() {
-    // A better progress logic for two phases
-    let progress = 0;
-    const totalGeneral = questions.filter(q => q.phase === 'general').length;
-    const totalSpecific = 2; // We expect 2 specific questions
-    const totalQuestions = totalGeneral + totalSpecific;
-
-    if (currentPhase === 'general') {
-        progress = (currentQuestionIndex / totalQuestions) * 100;
-    } else {
-        progress = ((totalGeneral + (currentQuestionIndex - totalGeneral)) / totalQuestions) * 100;
-    }
+    category_counts = Counter(ans.selectedCategory for ans in request.answers)
+    dominant_category = category_counts.most_common(1)[0][0]
     
-    document.getElementById('progress-bar').style.width = `${Math.min(progress, 100)}%`;
-}
+    specific_q = [q for q in all_questions if q.get("phase") == "specific" and q.get("category") == dominant_category]
+    return {"dominant_category": dominant_category, "questions": specific_q}
 
-function displayResult(data) {
-    const quizContainer = document.querySelector('.quiz-container');
-    const resultArea = document.getElementById('result-area');
+@app.post("/api/quiz/submit")
+async def submit_full_quiz(submission: FullQuizSubmission):
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="API key not configured")
 
-    quizContainer.innerHTML = '';
-    quizContainer.appendChild(resultArea);
-    resultArea.classList.remove('hidden');
-    resultArea.style.animation = 'slideIn 0.5s ease-out forwards';
+    user_prompt_content = "Here is the student's full quiz transcript:\n\n"
+    for ans in submission.all_answers:
+        user_prompt_content += f"- Q: \"{ans.get('question')}\"\n  - A: \"{ans.get('answer')}\"\n"
 
-    let careersHTML = '<ul>';
-    data.suitable_careers.forEach(career => {
-        careersHTML += `<li>${career}</li>`;
-    });
-    careersHTML += '</ul>';
-
-    resultArea.innerHTML = `
-        <h2>Your Personalized Recommendation</h2>
-        <div class="stream-box">
-            <h4>Primary Stream</h4>
-            <p style="font-size: 1.5rem; font-weight: bold;">${data.recommended_stream}</p>
-        </div>
-        <p id="result-reason">"${data.reason}"</p>
-        <div>
-            <h3>Potential Career Paths</h3>
-            ${careersHTML}
-        </div>
-    `;
-}
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "model": "mistralai/mistral-7b-instruct:free",
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt_content}
+                    ]
+                }
+            )
+            response.raise_for_status()
+            ai_response = response.json()
+            json_result = ai_response['choices'][0]['message']['content']
+            return {"status": "success", "data": json_result}
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        raise HTTPException(status_code=500, detail="An internal error occurred.")

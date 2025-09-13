@@ -1,0 +1,94 @@
+{
+  "questions": [
+    {
+      "id": "g1",
+      "phase": "general",
+      "question": "Which of these activities sounds most appealing to you?",
+      "options": [
+        {"text": "Designing a beautiful poster or writing a story", "category": "Arts"},
+        {"text": "Solving a complex logical puzzle or a math problem", "category": "Science"},
+        {"text": "Organizing a successful event or creating a business plan", "category": "Commerce"}
+      ]
+    },
+    {
+      "id": "g2",
+      "phase": "general",
+      "question": "When you encounter a problem, what's your first instinct?",
+      "options": [
+        {"text": "To understand the emotional and human aspects of the situation", "category": "Arts"},
+        {"text": "To analyze the data and find the root cause", "category": "Science"},
+        {"text": "To find the most efficient and practical solution quickly", "category": "Commerce"}
+      ]
+    },
+    {
+      "id": "g3",
+      "phase": "general",
+      "question": "What kind of work environment do you think you'd thrive in?",
+      "options": [
+        {"text": "A creative studio or a place that values self-expression", "category": "Arts"},
+        {"text": "A research lab or a tech company focused on innovation", "category": "Science"},
+        {"text": "A corporate office or leading a team towards a common goal", "category": "Commerce"}
+      ]
+    },
+    {
+      "id": "s1_arts",
+      "phase": "specific",
+      "category": "Arts",
+      "question": "You're given a historical topic. What would you rather do?",
+      "options": [
+        {"text": "Write a compelling narrative about the people involved"},
+        {"text": "Analyze the social and political impact it had"}
+      ]
+    },
+    {
+      "id": "s2_arts",
+      "phase": "specific",
+      "category": "Arts",
+      "question": "Which skill do you want to develop more?",
+      "options": [
+        {"text": "Public speaking and debating"},
+        {"text": "Visual design and digital art"}
+      ]
+    },
+    {
+      "id": "s1_science",
+      "phase": "specific",
+      "category": "Science",
+      "question": "Which of these scientific fields excites you more?",
+      "options": [
+        {"text": "Understanding the fundamental laws of the universe (Physics, Chemistry)"},
+        {"text": "Working with living organisms and ecosystems (Biology, Environmental Science)"}
+      ]
+    },
+    {
+      "id": "s2_science",
+      "phase": "specific",
+      "category": "Science",
+      "question": "Are you more interested in...",
+      "options": [
+        {"text": "Theoretical research and experiments"},
+        {"text": "Building practical applications and software"}
+      ]
+    },
+    {
+      "id": "s1_commerce",
+      "phase": "specific",
+      "category": "Commerce",
+      "question": "What aspect of business interests you the most?",
+      "options": [
+        {"text": "Managing finances, investments, and accounting"},
+        {"text": "Marketing, sales, and understanding customer behavior"}
+      ]
+    },
+    {
+      "id": "s2_commerce",
+      "phase": "specific",
+      "category": "Commerce",
+      "question": "What role do you see yourself in?",
+      "options": [
+        {"text": "An expert analyst providing critical data"},
+        {"text": "A manager leading a large team"}
+      ]
+    }
+  ]
+}
